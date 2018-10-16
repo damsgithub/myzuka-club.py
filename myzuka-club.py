@@ -21,8 +21,8 @@ import argparse
 from multiprocessing import Pool
 from bs4 import BeautifulSoup
 
-version = 5.3
-useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:61.0) Gecko/20100101 Firefox/61.0"
+version = 5.5
+useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:62.0) Gecko/20100101 Firefox/62.0"
 covers_name = "cover.jpg"
 
 def script_help(version, script_name):
@@ -423,23 +423,6 @@ def download_song(params):
                 file_url = link.get('href')
                 break
 
-#            if song_infos.group(1) != "":
-#                file_name = tracknum +'-' + sanitize_path(song_infos.group(1))
-#                if debug: print("%s: got_filename: %s" % (process_id, file_name))
-#            else:
-#                color_message("** %s: Cannot find filename for: %s , retrying **" % (process_id, url), "lightyellow")
-#                continue
-#
-#            if song_infos.group(2) != "":
-#                file_url = song_infos.group(2)
-#                if debug: print("%s: got_fileurl: %s" % (process_id, file_url))
-#                # prepend base url if necessary
-#                if re.match(r'^/', file_url):
-#                    file_url = get_base_url(url, debug) + file_url
-#            else:
-#                color_message("** %s: Cannot find file url for: %s , retrying **" % (process_id, url), "lightyellow")
-#                continue
-
             # prepend base url if necessary
             if re.match(r'^/', file_url):
                 file_url = get_base_url(url, debug) + file_url
@@ -565,7 +548,7 @@ def download_album(url, base_path, debug, socks_proxy, socks_port, timeout, nb_c
 
     os.chdir('..')
     if not absent_track_flag: color_message("** ALBUM DOWNLOAD FINISHED **", "lightgreen")
-    else: color_message("** ALBUM DOWNLOAD INCOMPLETE, MISSING TRACKS ON WEBSITE **", "lightred")
+    else: color_message("** ALBUM DOWNLOAD INCOMPLETE, TRACK(S) MISSING ON WEBSITE **", "lightred")
 
 def download_artist(url, base_path, debug, socks_proxy, socks_port, timeout, nb_conn):
     page_soup = get_page_soup(url, str.encode(''), debug, socks_proxy, socks_port, timeout)
@@ -577,8 +560,8 @@ def download_artist(url, base_path, debug, socks_proxy, socks_port, timeout, nb_
 
     albums_links = []
     for link in page_soup.find_all('a', href=True):
-        if re.search(r'/album/.*', link['href']):
-            # most of albums' links appear 2 times, we need to de-duplicate.
+        if re.search(r'/Album/.*', link['href']):
+            # albums' links may appear multiple times, we need to de-duplicate.
             if link['href'] not in albums_links:
                 albums_links.append(link['href'])
 
@@ -638,12 +621,12 @@ def main():
 
         # modification of global variables do not work correctly under windows with multiprocessing,
         # so I have to pass all these parameters to these functions...
-        if re.search(r'/artist/.*', args.url, re.IGNORECASE):
+        if re.search(r'/Artist/.*', args.url, re.IGNORECASE):
             download_artist(args.url, args.path, debug, socks_proxy, socks_port, timeout, nb_conn)
-        elif re.search(r'/album/.*', args.url, re.IGNORECASE):
+        elif re.search(r'/Album/.*', args.url, re.IGNORECASE):
             download_album(args.url, args.path, debug, socks_proxy, socks_port, timeout, nb_conn)
         else:
-            color_message("** Error: unable to recognize url, it should contain '/artist/' or '/album/'! **", "lightred")
+            color_message("** Error: unable to recognize url, it should contain '/Artist/' or '/Album/'! **", "lightred")
 
     except Exception as e:
         color_message("** Error: Cannot download URL: %s, reason: %s **" % (args.url, str(e)), "lightred")
