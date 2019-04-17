@@ -18,6 +18,7 @@ import socket
 import urllib.request
 import html
 import argparse
+import traceback
 from multiprocessing import Pool
 from bs4 import BeautifulSoup
 
@@ -227,36 +228,68 @@ def prepare_album_dir(page_content, base_path, debug):
     if debug > 1:
         log_to_file("prepare_album_dir", page_content)
 
-    album_infos_re = re.compile('<span itemprop="title">(.+?)</span>\r?\n?'
+    print("")
+
+#   album_infos_re = re.compile('<span itemprop="title">(.+?)</span>\r?\n?'
+#                               '(?:\r?\n?)*'
+#                               '(?:\s)*</a>/\r?\n?'
+#                               '(?:\r?\n?)*'
+#                               '(?:\s)*<span (?:.+?)itemtype="http://data-vocabulary.org/Breadcrumb"(?:.*?)>(.+?)</span>')
+#
+#   album_infos = album_infos_re.search(page_content)
+#
+#   if not album_infos:
+#       artist = input("Unable to get ARTIST NAME. Please enter here: ")
+#       title = input("Unable to get ALBUM NAME. Please enter here: ")
+#   else:
+#       artist = album_infos.group(1)
+#       title = album_infos.group(2)
+
+    # find artist name
+    artist_info_re = re.compile('<td>Исполнитель:</td>\r?\n?'
+                                '(?:\s)*<td>\r?\n?'
+                                '(?:\r?\n?)*'
+                                '(?:\s)*<a (?:.+?)>\r?\n?'
+                                '(?:\s)*<meta (?:.+?)itemprop="url"(?:.*?)(?:\s)*/>\r?\n?'
+                                '(?:\s)*<meta (?:.+?)itemprop="name"(?:.*?)(?:\s)*/>\r?\n?'
+                                '(?:\r?\n?)*'
+                                '(?:\s)*(.+?)\r?\n?'
+                                '(?:\r?\n?)*'
+                                '(?:\s)*</a>')
+    artist_info = artist_info_re.search(page_content)
+
+    if not artist_info:
+        artist = input("Unable to get ARTIST NAME. Please enter here: ")
+    else:
+        artist = artist_info.group(1)
+    print("Artist: %s" % artist)
+
+    # find album name
+    title_info_re = re.compile('<span itemprop="title">(?:.+?)</span>\r?\n?'
                                 '(?:\r?\n?)*'
                                 '(?:\s)*</a>/\r?\n?'
                                 '(?:\r?\n?)*'
-                                '(?:\s)*<span (?:.+?)itemtype="http://data-vocabulary.org/Breadcrumb"(?:.*?)>(.+?)</span>')
+                                '(?:\s)*<span (?:.*?)itemtype="http://data-vocabulary.org/Breadcrumb"(?:.*?)>(.+?)</span>')
+    title_info = title_info_re.search(page_content)
 
-    album_infos = album_infos_re.search(page_content)
-
-    print("")
-    if not album_infos:
-        artist = input("Unable to get ARTIST NAME. Please enter here: ")
+    if not title_info:
         title = input("Unable to get ALBUM NAME. Please enter here: ")
     else:
-        artist = album_infos.group(1)
-        title = album_infos.group(2)
-   
-    print("Artist: %s" % artist)
+        title = title_info.group(1)
     print("Album: %s" % title)
 
     # Get the year if it is available
-    album_infos_re = re.compile('<time datetime="(\d+).*?" itemprop="datePublished"></time>\r?\n?')
+    year_info_re = re.compile('<time datetime="(\d+).*?" itemprop="datePublished"></time>\r?\n?')
 
-    album_infos = album_infos_re.search(page_content)
+    year_info = year_info_re.search(page_content)
 
-    if album_infos and album_infos.group(1):
-        year = album_infos.group(1)
+    if year_info and year_info.group(1):
+        year = year_info.group(1)
+    else:
+        year = input("Unable to get ALBUM YEAR. Please enter here (may leave blank): ")
         print("Year: %s" % year)
-    #else:
-    #    year = input("Unable to get ALBUM YEAR. Please enter here (may leave blank): ")
 
+    # prepare album's directory
     if year:
         album_dir = artist + " - " + title + " (" + year + ")"
     else:
@@ -290,6 +323,7 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
 
         if not file_name:
             file_name = u.info().get_filename()
+        file_name = file_name.replace("_myzuka", "")
 
         if os.path.exists(file_name):
             dlded_size = os.path.getsize(file_name)
