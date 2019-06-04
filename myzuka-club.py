@@ -426,7 +426,7 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
         color_message('** Exception caught in download_file(%s,%s) with error: "%s". We will continue anyway. **' 
                % (url, file_name, str(e)), "lightyellow")
         traceback.print_stack(file=sys.stderr)
-        pass
+        return -1
 
 
 def download_song(params):
