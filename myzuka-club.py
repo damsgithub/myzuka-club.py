@@ -7,6 +7,10 @@
 
 # requires installation of the following additional modules: PySocks and Beautifulsoup4
 
+# Changelog:
+# 5.6: better support for Tor socks proxy, and support for "requests" module instead of "urllib.request", because
+# cloudflare seems to block more "urllib.request" than "requests", even with the same headers...
+
 import re
 import sys
 import os
@@ -15,25 +19,26 @@ import time
 import random
 import socks
 import socket
-import urllib.request
 import html
 import argparse
 import traceback
 from multiprocessing import Pool
 from bs4 import BeautifulSoup
 
-version = 5.5
-useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:62.0) Gecko/20100101 Firefox/62.0"
+site = "http://myzuka.club"
+userequests = 1
+version = 5.6
+useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36"
 covers_name = "cover.jpg"
 
 def script_help(version, script_name):
-    description = "Python script to download albums from http://myzuka.club, version %s." % version
+    description = "Python script to download albums from %s, version %s." % (site, version)
     help_string = description + """
 
 ------------------------------------------------------------------------------------------------------------------
 ################## To download an album, give it an url with '/Album/' in it #####################################
 ------------------------------------------------------------------------------------------------------------------
-user@computer:/tmp$ %s [-p /path] http://myzuka.club/Album/630746/The-6-Cello-Suites-Cd1-1994
+user@computer:/tmp$ %s [-p /path] %s/Album/630746/The-6-Cello-Suites-Cd1-1994
 ** We will try to use 3 simultaneous downloads, progress will be shown **
 ** after each completed file but not necessarily in album's order. **
 
@@ -56,7 +61,7 @@ It will create an "Artist - Album" directory in the path given as argument (or e
 ################## To download all albums from an artist, give it an url with '/Artist/' in it ###################
 ------------------------------------------------------------------------------------------------------------------
 
-user@computer:/tmp$ %s [-p /path] http://myzuka.club/Artist/7110/Johann-Sebastian-Bach/Albums
+user@computer:/tmp$ %s [-p /path] %s/Artist/7110/Johann-Sebastian-Bach/Albums
 ** We will try to use 3 simultaneous downloads, progress will be shown **
 ** after each completed file but not necessarily in album's order. **
 ** Warning: we are going to download all albums from this artist! **
@@ -91,7 +96,7 @@ It will iterate on all albums of this artist.
 For more info, see https://github.com/damsgithub/myzuka-club.py
 
 
-""" % (script_name, script_name)
+""" % (script_name, site, script_name, site)
     return help_string
 
 
@@ -133,12 +138,6 @@ def color_message(msg, color):
             return
     print(colors[color] + msg + colors['clear'])
 
- 
-def spinning_wheel():
-    while True:
-        for cursor in '|/-\\':
-            yield cursor
-
 
 def dl_status(file_name, dlded_size, real_size):
     status = r'%-50s        %05.2f of %05.2f MB [%3d%%]' % \
@@ -168,41 +167,93 @@ def get_base_url(url, debug):
     return base_url
 
 
-def open_url(url, socks_proxy, socks_port, timeout, data, range_header):
+def open_url(url, debug, socks_proxy, socks_port, timeout, data, range_header):
     if socks_proxy and socks_port:
-        socks.set_default_proxy(socks.SOCKS5, socks_proxy, socks_port)
+        socks.set_default_proxy(socks.SOCKS5, socks_proxy, socks_port, True) # 4th parameter is to do dns resolution through the socks proxy
         socket.socket = socks.socksocket
 
     while True:
-        try:
-            #print("open_url: %s" % url)
+        if not userequests:
+            # some say you have to make the import after proxy definition
+            import urllib.request
+
+            if debug: print("open_url: %s" % url)
+
+            myheaders = {'User-Agent' : useragent, 'Referer' : site}
             req = urllib.request.Request(
                 url,
-                data)
-            req.add_header('User-Agent', useragent)
+                data,
+                headers=myheaders
+            )
             if range_header: req.add_header('Range', range_header)
 
-            u = urllib.request.urlopen(req, timeout=timeout)
-            redirect = u.geturl()
-        except (urllib.error.HTTPError) as e:
-            color_message("** Connection problem 1 (%s), reconnecting **" % e.reason, "lightyellow")
-            time.sleep(random.randint(2,5))
-            continue
-        except (socket.timeout, socket.error, ConnectionError) as e:
-            color_message("** Connection problem 2 (%s), reconnecting **" % str(e), "lightyellow")
-            time.sleep(random.randint(2,5))
-            continue
-        except urllib.error.URLError as e:
-            if re.search('timed out', str(e.reason)):
-                # on linux "timed out" is a socket.timeout exception, 
-                # on Windows it is an URLError exception....
-                color_message("** Connection problem 3 (%s), reconnecting **" % e.reason, "lightyellow")
-                time.sleep(random.randint(2,5))
+            try:
+                u = urllib.request.urlopen(req, timeout=timeout)
+                if debug: print("HTTP reponse code: %s" % u)
+            except urllib.error.HTTPError as e:
+                color_message("** urllib.error.HTTPError (%s), reconnecting **" % e.reason, "lightyellow")
+                time.sleep(random.randint(5,15))
                 continue
-            else:
-                color_message("** URLError exception (%s), aborting **" % e.reason, "lightred")
+            except urllib.error.URLError as e:
+                if re.search('timed out', str(e.reason)):
+                    # on linux "timed out" is a socket.timeout exception, 
+                    # on Windows it is an URLError exception....
+                    color_message("** Connection timeout (%s), reconnecting **" % e.reason, "lightyellow")
+                    time.sleep(random.randint(5,15))
+                    continue
+                else:
+                    color_message("** urllib.error.URLError, aborting **" % e.reason, "lightred")
+                    u = None
+            except (socket.timeout, socket.error, ConnectionError) as e:
+                color_message("** Connection problem 2 (%s), reconnecting **" % str(e), "lightyellow")
+                time.sleep(random.randint(5,15))
+                continue
+            except Exception as e:
+                color_message("** Exception: aborting (%s) with error: %s **" % (url, str(e)), "lightred")
                 u = None
-        except Exception as e:
+
+        else:
+            import cfscrape
+            import requests
+            scraper = cfscrape.create_scraper()
+            # the "h" after socks5 is to make the dns resolution through the socks proxy
+            proxies = {
+                'http': 'socks5h://' + socks_proxy + ':' + str(socks_port),
+                'https': 'socks5h://' + socks_proxy + ':' + str(socks_port)
+            }
+			
+            try:
+                if range_header:
+                    myheaders = {'User-Agent' : useragent, 'Referer' : site, 'Range' : range_header}
+                    u = scraper.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
+                    #u = requests.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
+                else:
+                    myheaders = {'User-Agent' : useragent, 'Referer' : site}
+                    #u = requests.get(url, proxies=proxies, headers=myheaders, timeout=timeout)
+                    u = scraper.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
+
+                u.raise_for_status()
+                if debug: print("HTTP reponse code: %s" % u)
+            except requests.exceptions.HTTPError as e:
+                color_message("** requests.exceptions.HTTPError (%s), reconnecting **" % str(e), "lightyellow")
+                time.sleep(random.randint(5,15))
+                continue
+            except requests.exceptions.ConnectionError as e:
+                color_message("**  requests.exceptions.ConnectionError (%s), reconnecting **" % str(e), "lightyellow")
+                time.sleep(random.randint(5,15))
+                continue
+            except requests.exceptions.Timeout as e:
+                color_message("** Connection timeout (%s), reconnecting **" % str(e), "lightyellow")
+                time.sleep(random.randint(5,15))
+                continue
+            except requests.exceptions.RequestException as e:
+                color_message("** Exception: aborting (%s) with error: %s **" % (url, str(e)), "lightred")
+                u = None
+            except (socket.timeout, socket.error, ConnectionError) as e:
+                color_message("** Connection problem 2 (%s), reconnecting **" % str(e), "lightyellow")
+                time.sleep(random.randint(5,15))
+                continue
+            except Exception as e:
                 color_message("** Exception: aborting (%s) with error: %s **" % (url, str(e)), "lightred")
                 u = None
 
@@ -210,10 +261,11 @@ def open_url(url, socks_proxy, socks_port, timeout, data, range_header):
 
 
 def get_page_soup(url, data, debug, socks_proxy, socks_port, timeout):
-    page = open_url(url, socks_proxy, socks_port, timeout, data=data, range_header=None)
+    page = open_url(url, debug, socks_proxy, socks_port, timeout, data=data, range_header=None)
     if not page:
         return None
-    page_soup = BeautifulSoup(page, "html.parser", from_encoding=page.info().get_param('charset'))
+    if not userequests: page_soup = BeautifulSoup(page, "html.parser", from_encoding=page.info().get_param('charset'))
+    else: page_soup = BeautifulSoup(page.content, "html.parser", from_encoding=page.encoding)
     #if debug > 1: print("page_soup: %s" % page_soup)
     page.close()
     return page_soup
@@ -229,21 +281,6 @@ def prepare_album_dir(page_content, base_path, debug):
         log_to_file("prepare_album_dir", page_content)
 
     print("")
-
-#   album_infos_re = re.compile('<span itemprop="title">(.+?)</span>\r?\n?'
-#                               '(?:\r?\n?)*'
-#                               '(?:\s)*</a>/\r?\n?'
-#                               '(?:\r?\n?)*'
-#                               '(?:\s)*<span (?:.+?)itemtype="http://data-vocabulary.org/Breadcrumb"(?:.*?)>(.+?)</span>')
-#
-#   album_infos = album_infos_re.search(page_content)
-#
-#   if not album_infos:
-#       artist = input("Unable to get ARTIST NAME. Please enter here: ")
-#       title = input("Unable to get ALBUM NAME. Please enter here: ")
-#   else:
-#       artist = album_infos.group(1)
-#       title = album_infos.group(2)
 
     # find artist name
     artist_info_re = re.compile('<td>Исполнитель:</td>\r?\n?'
@@ -308,6 +345,17 @@ def sanitize_path(path):
     chars_to_remove = str.maketrans('/\\?*|":><', '         ')
     return path.translate(chars_to_remove)
 
+def get_filename_from_cd(cd):
+    """
+    Get filename from content-disposition
+    """
+    if not cd:
+        return None
+    fname = re.findall('filename=(.+)', cd)
+    if len(fname) == 0:
+        return None
+    return fname[0]
+
 
 def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
     process_id = os.getpid()
@@ -316,13 +364,14 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
         partial_dl = 0
         dlded_size = 0
     
-        u = open_url(url, socks_proxy, socks_port, timeout, data=None, range_header=None)
-        #print("url: %s" % url)
+        u = open_url(url, debug, socks_proxy, socks_port, timeout, data=None, range_header=None)
         if not u:
             return -1
 
         if not file_name:
-            file_name = u.info().get_filename()
+            if not userequests: file_name = u.info().get_filename()
+            else: file_name = get_filename_from_cd(u.headers.get('content-disposition'))
+        if debug > 1: print("filename: %s" % file_name)
         file_name = file_name.replace("_myzuka", "")
 
         if os.path.exists(file_name):
@@ -335,7 +384,9 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
         i = 0
         while (i < 5):
             try:
-                real_size = int(u.info()['content-length'])
+                if not userequests: real_size = int(u.info()['content-length'])
+                else: real_size = int(u.headers['Content-length'])
+                if debug > 1: print("length: %s" % real_size)
                 if real_size <= 1024:
                    # we got served an "Exceed the download limit" (Превышение лимита скачивания) page, 
                    # retry without incrementing counter (for musicmp3spb)
@@ -359,11 +410,15 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
             
             range_header = 'bytes=%s-%s' % (dlded_size, real_size)
             data = None
-            u = open_url(url, socks_proxy, socks_port, timeout, data, range_header)
+            u = open_url(url, debug, socks_proxy, socks_port, timeout, data, range_header)
             if not u: return -1
     
             # test if the server supports the Range header
-            if (u.getcode() == 206):
+            range_support = ""
+            if not userequests: range_support = u.getcode()
+            else: range_support = u.status_code
+
+            if (range_support == 206):
                 partial_dl = 1
             else:
                 color_message("** Range/partial download is not supported by server, restarting download at beginning **", "lightyellow")
@@ -387,21 +442,27 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
 
         # get the file
         block_sz = 8192
-        #spin = spinning_wheel()
+
         while True:
-            buffer = u.read(block_sz)
-            if not buffer:
-                break
-
-            dlded_size += len(buffer)
-            f.write(buffer)
-
-            # show progress
-            #sys.stdout.write(next(spin))
-            #sys.stdout.flush()
-            #time.sleep(0.1)
-            #sys.stdout.write('\b')
-    
+            if not userequests: 
+                for buffer in u.read(block_sz):
+                    if not buffer:
+                        break
+                    else:
+                        dlded_size += len(buffer)
+                        #if debug > 1: print("Downloaded size: %s" % dlded_size)
+                        f.write(buffer)
+                        #if debug > 1: print("Buffer written")
+            else:
+                for buffer in u.iter_content(chunk_size=block_sz):
+                    if not buffer:
+                        break
+                    else:
+                        dlded_size += len(list(buffer))
+                        #if debug > 1: print("Downloaded size: %s" % dlded_size)
+                        f.write(buffer)
+                        #if debug > 1: print("Buffer written")
+			
         if (real_size == -1): 
             real_size = dlded_size
             color_message("%s (file downloaded, but could not verify if it is complete)" 
