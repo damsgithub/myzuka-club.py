@@ -1,7 +1,8 @@
 # myzuka-club.py
-Python 3 port of https://github.com/xor512/musicmp3spb.org (http://musicmp3spb.org/ music downloader) with some differences.
+Python 3 port of https://github.com/xor512/musicmp3spb.org with some differences.
 
 Features included:
+* support for the new site: myzuka.club
 * Cover downloading
 * Windows/Linux support
 * Resume incomplete songs and albums downloads
