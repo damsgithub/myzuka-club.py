@@ -18,11 +18,13 @@ TODO:
 
 Install:
 * install python 3 (tested with 3.6.2) if not already present on your distrib. For Windows, see here https://www.python.org/downloads/windows/
-* install required modules: BeautifulSoup4 and Pysocks. Use your standard repo for linux, for Windows do in an administrator command prompt
+* install required modules. Use your standard repo for linux, for Windows do in an administrator command prompt
 
 ```sh
 python -m pip install BeautifulSoup4 Pysocks requests cfscrape
 ```
+
+Note: you don't need to install requests and cfscrape if you set "userequests" to "0" at the start of the script. They are only usefull if you want to download through Tor socks proxy due to cloudflare detecting the script as a bot.
 
 Usage:
 * Just give it an album or artist url from http://myzuka.club/ as argument, see below:
