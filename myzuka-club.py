@@ -217,16 +217,19 @@ def open_url(url, debug, socks_proxy, socks_port, timeout, data, range_header):
             import requests
             scraper = cfscrape.create_scraper()
             # the "h" after socks5 is to make the dns resolution through the socks proxy
-            proxies = {
-                'http': 'socks5h://' + socks_proxy + ':' + str(socks_port),
-                'https': 'socks5h://' + socks_proxy + ':' + str(socks_port)
-            }
+            if socks_proxy and socks_port:
+                proxies = {
+                    'http': 'socks5h://' + socks_proxy + ':' + str(socks_port),
+                    'https': 'socks5h://' + socks_proxy + ':' + str(socks_port)
+                }
+            else:
+                proxies = {}
 			
             try:
                 if range_header:
                     myheaders = {'User-Agent' : useragent, 'Referer' : site, 'Range' : range_header}
-                    u = scraper.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
                     #u = requests.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
+                    u = scraper.get(url, proxies=proxies, headers=myheaders, timeout=timeout, stream=True)
                 else:
                     myheaders = {'User-Agent' : useragent, 'Referer' : site}
                     #u = requests.get(url, proxies=proxies, headers=myheaders, timeout=timeout)
