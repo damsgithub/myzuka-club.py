@@ -577,7 +577,7 @@ def download_album(url, base_path, debug, socks_proxy, socks_port, timeout, nb_c
                                        '(?:\s)*<div class="options">\r?\n?'
                                        '(?:\s)*<div class="top">\r?\n?'
                                        '(?:\s)*<span (?:.+?)title="Сохранить в плейлист"(?:.*?)></span>\r?\n?'
-                                       '(?:\s)*<span (?:.+?)title="Добавить в плеер"(?:.*?)>(?:.+?)</span>\r?\n?'
+                                       '(?:\s)*<span (?:.+?)title="Добавить в плеер"(?:.*?)>(?:.*?)</span>\r?\n?'
                                        '(?:\s)*<a href="' + link['href'], re.I)
 
         tracknum_infos = tracknum_infos_re.search(page_content)
