@@ -446,25 +446,25 @@ def download_file(url, file_name, debug, socks_proxy, socks_port, timeout):
         # get the file
         block_sz = 8192
 
-        while True:
-            if not userequests: 
-                for buffer in u.read(block_sz):
-                    if not buffer:
-                        break
-                    else:
-                        dlded_size += len(buffer)
-                        #if debug > 1: print("Downloaded size: %s" % dlded_size)
-                        f.write(buffer)
-                        #if debug > 1: print("Buffer written")
-            else:
-                for buffer in u.iter_content(chunk_size=block_sz):
-                    if not buffer:
-                        break
-                    else:
-                        dlded_size += len(list(buffer))
-                        #if debug > 1: print("Downloaded size: %s" % dlded_size)
-                        f.write(buffer)
-                        #if debug > 1: print("Buffer written")
+        if not userequests:
+            while True:
+                buffer = u.read(block_sz)
+                if not buffer:
+                    break
+                else:
+                    dlded_size += len(buffer)
+                    #if debug > 1: print("Downloaded size: %s" % dlded_size)
+                    f.write(buffer)
+                    #if debug > 1: print("Buffer written")
+        else:
+            for buffer in u.iter_content(chunk_size=block_sz):
+                if not buffer:
+                    break
+                else:
+                    dlded_size += len(list(buffer))
+                    #if debug > 1: print("Downloaded size: %s" % dlded_size)
+                    f.write(buffer)
+                    #if debug > 1: print("Buffer written")
 			
         if (real_size == -1): 
             real_size = dlded_size
