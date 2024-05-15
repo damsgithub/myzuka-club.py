@@ -1,4 +1,5 @@
-# myzuka-club.py : NO MORE MAINTAINED, see https://github.com/damsgithub/myzuka-club-rich.py
+# myzuka-club.py : Unmaintained, use this new grabber: https://github.com/damsgithub/generic-zic-downloader.py
+
 Python 3 port of https://github.com/xor512/musicmp3spb.org with some differences.
 
 Features included:
